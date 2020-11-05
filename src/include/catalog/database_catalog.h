@@ -776,5 +776,13 @@ class DatabaseCatalog {
    */
   template <typename Column, typename ClassOid>
   bool DeleteColumnStatistics(common::ManagedPointer<transaction::TransactionContext> txn, ClassOid class_oid);
+
+  /**
+    * Returns a TableStats object corresponding to the given table.
+    * @param table_id oid of table to retrieve statistics for
+    * @return nullptr if table_id is invalid, else a valid TableStats object
+   */
+  std::unique_ptr<optimizer::TableStats> GetTableStats(common::ManagedPointer<transaction::TransactionContext> txn,
+                                                       table_oid_t table_id);
 };
 }  // namespace noisepage::catalog
