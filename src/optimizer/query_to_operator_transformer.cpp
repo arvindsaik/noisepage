@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "catalog/catalog_accessor.h"
+#include "catalog/postgres/pg_statistic.h"
 #include "common/macros.h"
 #include "common/managed_pointer.h"
 #include "loggers/optimizer_logger.h"
@@ -625,15 +626,56 @@ void QueryToOperatorTransformer::Visit(common::ManagedPointer<parser::CopyStatem
 
 void QueryToOperatorTransformer::Visit(UNUSED_ATTRIBUTE common::ManagedPointer<parser::AnalyzeStatement> op) {
   OPTIMIZER_LOG_DEBUG("Transforming AnalyzeStatement to operators ...");
-  std::vector<catalog::col_oid_t> columns;
-  auto tb_oid = accessor_->GetTableOid(op->GetAnalyzeTable()->GetTableName());
+  auto tb_ref = op->GetAnalyzeTable();
+  auto tb_oid = accessor_->GetTableOid(tb_ref->GetTableName());
   auto schema = accessor_->GetSchema(tb_oid);
+  transaction::TransactionContext *txn_context = accessor_->GetTxn().Get();
+
+  // Extract column IDs to construct LogicalAnalyze node
+  // TODO(arvindsaik): Fill in all column OIDs when op->GetColumns().empty()
+  std::vector<catalog::col_oid_t> columns;
   for (const auto &col : *(op->GetColumns())) columns.emplace_back(schema.GetColumn(col).Oid());
   auto analyze_expr = std::make_unique<OperatorNode>(
       LogicalAnalyze::Make(accessor_->GetDatabaseOid(op->GetAnalyzeTable()->GetDatabaseName()), tb_oid,
                            std::move(columns))
           .RegisterWithTxnContext(accessor_->GetTxn().Get()),
       std::vector<std::unique_ptr<AbstractOptimizerNode>>{}, accessor_->GetTxn().Get());
+
+  // Construct left child: rows to scan
+  auto table_scan =
+      std::make_unique<OperatorNode>(LogicalGet::Make(db_oid_, tb_oid, {}, tb_ref->GetTableName(), false),
+                                                   std::vector<std::unique_ptr<AbstractOptimizerNode>>{}, txn_context);
+
+
+  analyze_expr->PushChild(std::move(table_scan));
+
+  // Construct right child: rows to update
+  // TODO(khg): Cleanup may be needed
+  const auto stat_table_oid = catalog::postgres::STATISTIC_TABLE_OID;
+  const auto stat_table_alias = "pg_statistic";  // TODO(khg): is this right?
+  const auto stat_schema = accessor_->GetSchema(stat_table_oid);
+  const auto stat_relid_oid = catalog::postgres::STARELID_COL_OID;
+  const auto &stat_relid_col = stat_schema.GetColumn(stat_relid_oid);
+
+
+  // Construct a predicate to match on relid
+  std::vector<std::unique_ptr<parser::AbstractExpression>> children_exprs;
+  children_exprs.emplace_back(std::make_unique<parser::ColumnValueExpression>(
+      "pg_statistic", stat_relid_col.Name(), db_oid_, stat_table_oid, stat_relid_oid, stat_relid_col.Type()));
+  children_exprs.emplace_back(
+      std::make_unique<parser::ConstantValueExpression>(type::TypeId::INTEGER, execution::sql::Integer(tb_oid.UnderlyingValue())));
+  parse_result_->AddExpression(
+      std::make_unique<parser::ComparisonExpression>(parser::ExpressionType::COMPARE_EQUAL, std::move(children_exprs)));
+  auto cmp_expr = common::ManagedPointer(parse_result_->GetExpressions().back());
+
+  std::vector<AnnotatedExpression> predicates;
+  predicates.emplace_back(cmp_expr, std::unordered_set<std::string>{});
+
+  auto statistic_scan = std::make_unique<OperatorNode>(
+      LogicalGet::Make(db_oid_, stat_table_oid, predicates, stat_table_alias, true).RegisterWithTxnContext(txn_context),
+      std::vector<std::unique_ptr<AbstractOptimizerNode>>{}, txn_context);
+  analyze_expr->PushChild(std::move(statistic_scan));
+
   output_expr_ = std::move(analyze_expr);
 }
 

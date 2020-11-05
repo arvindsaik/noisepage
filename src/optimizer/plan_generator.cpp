@@ -1060,6 +1060,8 @@ void PlanGenerator::Visit(const Analyze *analyze) {
                      .SetDatabaseOid(analyze->GetDatabaseOid())
                      .SetTableOid(analyze->GetTableOid())
                      .SetColumnOIDs(analyze->GetColumns())
+                     .AddChild(std::move(children_plans_[0]))
+                     .AddChild(std::move(children_plans_[1]))
                      .Build();
 }
 
