@@ -257,4 +257,9 @@ void ChildPropertyDeriver::Visit(UNUSED_ATTRIBUTE const DropView *drop_view) {
   output_.emplace_back(new PropertySet(), std::vector<PropertySet *>{});
 }
 
+void ChildPropertyDeriver::Visit(UNUSED_ATTRIBUTE const Analyze *op) {
+  // Provide nothing
+  output_.emplace_back(new PropertySet(), std::vector<PropertySet *>{new PropertySet(), new PropertySet()});
+}
+
 }  // namespace noisepage::optimizer

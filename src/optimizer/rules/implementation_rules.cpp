@@ -1187,7 +1187,12 @@ void LogicalDropViewToPhysicalDropView::Transform(common::ManagedPointer<Abstrac
 
 LogicalAnalyzeToPhysicalAnalyze::LogicalAnalyzeToPhysicalAnalyze() {
   type_ = RuleType::ANALYZE_TO_PHYSICAL;
+  auto left_child = new Pattern(OpType::LEAF);
+  auto right_child = new Pattern(OpType::LEAF);
   match_pattern_ = new Pattern(OpType::LOGICALANALYZE);
+  // Add node - should have two child nodes
+  match_pattern_->AddChild(left_child);
+  match_pattern_->AddChild(right_child);
 }
 
 bool LogicalAnalyzeToPhysicalAnalyze::Check(common::ManagedPointer<AbstractOptimizerNode> plan,
@@ -1199,12 +1204,17 @@ void LogicalAnalyzeToPhysicalAnalyze::Transform(common::ManagedPointer<AbstractO
                                                 std::vector<std::unique_ptr<AbstractOptimizerNode>> *transformed,
                                                 UNUSED_ATTRIBUTE OptimizationContext *context) const {
   auto logical_op = input->Contents()->GetContentsAs<LogicalAnalyze>();
-  NOISEPAGE_ASSERT(input->GetChildren().empty(), "LogicalAnalyze should have 0 children");
+//  NOISEPAGE_ASSERT(input->GetChildren().empty(), "LogicalAnalyze should have 0 children");
+  NOISEPAGE_ASSERT(input->GetChildren().size() == 2, "LogicalAnalyze should have 2 children");
+
+  std::vector<std::unique_ptr<AbstractOptimizerNode>> children;
+  children.emplace_back(input->GetChildren()[0]->Copy());
+  children.emplace_back(input->GetChildren()[1]->Copy());
 
   auto op = std::make_unique<OperatorNode>(
       Analyze::Make(logical_op->GetDatabaseOid(), logical_op->GetTableOid(), logical_op->GetColumns())
           .RegisterWithTxnContext(context->GetOptimizerContext()->GetTxn()),
-      std::vector<std::unique_ptr<AbstractOptimizerNode>>(), context->GetOptimizerContext()->GetTxn());
+      std::move(children), context->GetOptimizerContext()->GetTxn());
 
   transformed->emplace_back(std::move(op));
 }
