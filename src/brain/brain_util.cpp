@@ -52,6 +52,8 @@ std::string BrainUtil::ExecutionOperatingUnitTypeToString(ExecutionOperatingUnit
       return "OUTPUT";
     case ExecutionOperatingUnitType::LIMIT:
       return "LIMIT";
+    case ExecutionOperatingUnitType::ANALYZE:
+      return "ANALYZE";
     case ExecutionOperatingUnitType::PARALLEL_MERGE_HASHJOIN:
       return "PARALLEL_MERGE_HASHJOIN";
     case ExecutionOperatingUnitType::PARALLEL_MERGE_AGGBUILD:

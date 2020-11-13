@@ -1,0 +1,8 @@
+//
+// Created by preetansh on 11/12/20.
+//
+
+#ifndef NOISEPAGE_ANALYZE_TRANSLATOR_H
+#define NOISEPAGE_ANALYZE_TRANSLATOR_H
+
+#endif //NOISEPAGE_ANALYZE_TRANSLATOR_H

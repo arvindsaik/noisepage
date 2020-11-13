@@ -103,6 +103,11 @@ enum class ExecutionOperatingUnitType : uint32_t {
    * This gets dropped right now... :(
    */
   LIMIT,
+  /**
+   * ANALYZE
+   * TODO(preetang): Fill up
+   */
+  ANALYZE,
 
   PARALLEL_MERGE_HASHJOIN,
   PARALLEL_MERGE_AGGBUILD,
